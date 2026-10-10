@@ -1,0 +1,95 @@
+BARRA LIBRE — versión web gratuita, con sincronización
+======================================================
+
+La app completa, gratis para siempre:
+- Se instala en el teléfono como una app.
+- Funciona sin señal: guarda en el teléfono y sube a la nube cuando vuelve la conexión.
+- Con tu cuenta (Google o email) ves los mismos datos en el celu y en la PC.
+- Cada persona entra con su propia cuenta y solo ve sus datos.
+
+Usa dos servicios gratuitos: Firebase (base de datos de Google) y GitHub Pages
+(donde se publica la app). Ninguno pide tarjeta de crédito.
+
+
+PARTE A — FIREBASE (la base de datos)
+-------------------------------------
+1. Entrá a https://console.firebase.google.com con tu cuenta de Google.
+   "Crear un proyecto" → nombre: barra-libre → desactivá Google Analytics → Crear.
+
+2. En la página del proyecto tocá el ícono </> (Web).
+   Apodo: barra-libre. NO marques "Firebase Hosting". Tocá "Registrar app".
+   Aparece un bloque "const firebaseConfig = { ... }".
+   → Si estás armándolo con Claude: pegale ese bloque y te devuelve la app lista.
+   → Si lo hacés solo: abrí el archivo config.js de esta carpeta con el Bloc de notas
+     y reemplazá la línea  window.FIREBASE_CONFIG = null;  por:
+         window.FIREBASE_CONFIG = { apiKey: "...", authDomain: "...", projectId: "...", ... };
+     (copiá lo que está entre las llaves { } del bloque de Firebase).
+
+3. Menú izquierdo → Compilación (Build) → Authentication → Comenzar.
+   En "Método de acceso" activá:
+   - Google (elegí tu email como correo de asistencia) → Guardar.
+   - Correo electrónico/contraseña → Habilitar → Guardar.
+
+4. Menú izquierdo → Firestore Database → Crear base de datos.
+   Ubicación: southamerica-east1 (São Paulo). Modo: producción → Crear.
+
+5. En Firestore Database, pestaña "Reglas": borrá todo lo que hay, pegá el
+   contenido del archivo firestore.rules.txt de esta carpeta y tocá "Publicar".
+   (Esto hace que cada persona solo pueda ver y modificar SUS datos.)
+
+
+PARTE B — GITHUB PAGES (publicar la app)
+----------------------------------------
+6. Creá una cuenta gratis en https://github.com
+   "+" (arriba a la derecha) → New repository → nombre: barra-libre → Public →
+   Create repository.
+
+7. Tocá el link "uploading an existing file". Descomprimí el ZIP, abrí la carpeta
+   barra-libre-web y arrastrá TODO SU CONTENIDO (no la carpeta, lo de adentro,
+   incluida la carpeta icons; son unos 30 archivos). Esperá a que suba y tocá "Commit changes".
+
+8. Settings → Pages → Source: "Deploy from a branch" → Branch: main, / (root) → Save.
+   En 1–2 minutos aparece tu link: https://TU-USUARIO.github.io/barra-libre/
+
+9. IMPORTANTE — volvé a Firebase: Authentication → Configuración (Settings) →
+   Dominios autorizados → Agregar dominio → escribí  TU-USUARIO.github.io
+   (sin https:// y sin /barra-libre). Sin esto, "Entrar con Google" no funciona.
+
+
+PARTE C — USARLA
+----------------
+- Abrí el link en el teléfono → "Entrar con Google" (o creá cuenta con email).
+- Instalala: Android (Chrome) menú ⋮ → "Instalar app".
+             iPhone (Safari) Compartir → "Agregar a inicio".
+- En la PC abrí el mismo link y entrá con la misma cuenta: ves todo igual.
+- Para tus datos de la versión de Claude: allá hacé Menú → Exportar e importar →
+  Respaldo completo (JSON). Acá: Menú → Exportar e importar → Restaurar desde
+  un respaldo JSON.
+- Amigos: pasales el link. Cada uno entra con su cuenta y tiene sus propios datos.
+
+Límites del plan gratuito de Firebase: 50.000 lecturas y 20.000 escrituras por
+día y 1 GB de datos. Para uso personal y un grupo de amigos sobra.
+
+
+ACTUALIZAR LA APP
+-----------------
+Si Claude te pasa una versión nueva: subí los archivos otra vez al mismo
+repositorio (paso 7). Conservá TU config.js (no lo reemplaces por uno vacío).
+En el teléfono, abrí la app dos veces para que tome la versión nueva.
+Tus datos están en Firebase y no se tocan.
+
+
+SI ALGO FALLA
+-------------
+- "Falta autorizar este sitio en Firebase" → paso 9.
+- "La base de datos rechazó el guardado" → paso 5.
+- "Este método de ingreso no está activado" → paso 3.
+- Entrar con Google no abre nada → probá con email y contraseña, o desde Chrome.
+
+
+CRÉDITOS
+--------
+Imágenes de ejercicios: free-exercise-db (github.com/yuhonas/free-exercise-db),
+dominio público. Librerías: Chart.js (MIT), JSZip (MIT), Firebase JS SDK (Apache 2.0).
+Las recomendaciones son generales y basadas en evidencia; no reemplazan la
+consulta con un profesional de la salud.
