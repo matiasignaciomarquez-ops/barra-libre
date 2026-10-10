@@ -1,0 +1,28 @@
+BARRA LIBRE — Actualización completa (10/10/2026)
+=================================================
+Incluye todo: Clases de gimnasio, Mis rutinas y Yoga renovado.
+(Si ya subiste la actualización 1, subí esta igual: reemplaza esos archivos.)
+
+QUÉ TRAE
+- Yoga: 35 posturas con figura 3D animada (entrada paso a paso, de frente,
+  de perfil o girándola), puntos clave numerados, error común y versión más fácil.
+  6 estilos (Hatha, Vinyasa, Yin, Restaurativo, Power, Movilidad) y 12 clases guiadas.
+  Voz guiada en español (usa la voz del teléfono) y videos favoritos opcionales.
+- Cardio → Clases: Funcional, GAP, Cross, Box, Spinning, Pilates, HIIT y propias.
+- Mis rutinas: creá, guardá y elegí rutinas de Fuerza, Cardio, Yoga y Clases.
+
+ARCHIVOS (8)
+  index.html, sw.js           (cambiados)
+  clases.js, rutinas.js       (nuevos)
+  yoga3d.js, yoga_poses.js, yoga_data.js, yoga_ui2.js   (nuevos)
+NO incluye config.js: tu configuración de Firebase queda como está.
+
+CÓMO SUBIRLOS
+1. Descomprimí el ZIP.
+2. github.com/matiasignaciomarquez-ops/barra-libre → "Add file" → "Upload files".
+3. Arrastrá los 8 archivos (no la carpeta) y tocá "Commit changes".
+4. Esperá 1–2 minutos. En el celu abrí la app, cerrala y abrila de nuevo.
+
+Tus datos no se tocan. No hace falta cambiar nada en Firebase.
+La voz guiada funciona sin internet si el teléfono tiene una voz en español
+instalada (en Android: Ajustes → Texto a voz).
