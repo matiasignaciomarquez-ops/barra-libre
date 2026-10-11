@@ -1,0 +1,156 @@
+# Compila la app de Android de Barra Libre (con Health Connect) y la publica en "Releases".
+# Se ejecuta sola cuando se sube o cambia este archivo, o a mano desde la pestaña Actions.
+# La app abre la misma web de siempre: las actualizaciones de la web llegan solas, sin reinstalar.
+name: App Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/app-android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Crear el proyecto de Android
+        run: |
+          mkdir -p build && cd build
+          npm init -y > /dev/null
+          npm install @capacitor/core@8.5.3 @capacitor/cli@8.5.3 @capacitor/android@8.5.3 @capgo/capacitor-health@8.11.8
+          mkdir -p www
+          cat > www/index.html <<'HTML'
+          <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Barra Libre</title></head>
+          <body style="background:#111317;color:#ecebe6;font-family:sans-serif;padding:24px"><h2>Barra Libre</h2><p>Abrí la app con internet la primera vez.</p>
+          <p><a style="color:#ef5a4c" href="https://matiasignaciomarquez-ops.github.io/barra-libre/">Reintentar</a></p></body></html>
+          HTML
+          cat > www/privacypolicy.html <<'HTML'
+          <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Barra Libre · Privacidad</title>
+          <style>body{font:16px/1.55 system-ui,-apple-system,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#16181c;background:#f3f2ee}h1{font-size:24px}h2{font-size:18px;margin-top:24px}@media(prefers-color-scheme:dark){body{background:#111317;color:#ecebe6}}</style></head><body>
+          <h1>Barra Libre: política de privacidad</h1>
+          <p>Barra Libre es una app personal y gratuita de entrenamiento. No tiene publicidad, no vende datos y no los comparte con terceros.</p>
+          <h2>Datos de salud (Health Connect)</h2>
+          <p>Si das permiso, la app de Android lee de Health Connect: pasos, frecuencia cardíaca, frecuencia cardíaca en reposo, sueño, peso, VO2máx y entrenamientos. Solo se leen; la app no escribe datos en Health Connect.</p>
+          <p>Se usan únicamente para mostrarte tus estadísticas dentro de Barra Libre (pasos por día, sueño, zonas de frecuencia cardíaca y carga de entrenamiento).</p>
+          <h2>Dónde se guardan</h2>
+          <p>Los resúmenes se guardan en tu cuenta personal de Barra Libre (Google Firebase), protegida por tu usuario: solo vos podés leerlos. Si usás la app sin cuenta, quedan solo en tu teléfono.</p>
+          <h2>Cómo quitar el acceso o borrar datos</h2>
+          <p>Podés quitar los permisos en cualquier momento desde Ajustes → Health Connect → Permisos de apps → Barra Libre. Podés exportar o borrar tus registros desde el menú de la app, o borrar tu perfil.</p>
+          <p>Contacto: el dueño de la app (uso personal y familiar).</p>
+          </body></html>
+
+          HTML
+          cat > capacitor.config.json <<'JSON'
+          {
+            "appId": "ar.barralibre.app",
+            "appName": "Barra Libre",
+            "webDir": "www",
+            "server": { "url": "https://matiasignaciomarquez-ops.github.io/barra-libre/" },
+            "android": { "backgroundColor": "#111317" }
+          }
+          JSON
+          npx cap add android
+          npx cap sync android
+          # Health Connect pide Android 8 o más nuevo
+          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/' android/variables.gradle
+          # permiso para leer más de 30 días de historial
+          sed -i 's#<application#<uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />\n    <application#' android/app/src/main/AndroidManifest.xml
+          # número de versión = número de compilación
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.${{ github.run_number }}\"/" android/app/build.gradle
+          # ícono y pantalla de inicio de Barra Libre
+          mkdir -p assets
+          cp ../icons/icon-512.png assets/icon-only.png || true
+          npx --yes @capacitor/assets@3.0.5 generate --android --iconBackgroundColor '#111317' --iconBackgroundColorDark '#111317' --splashBackgroundColor '#111317' --splashBackgroundColorDark '#111317' || echo "Sin ícono personalizado"
+          if [ -f ../icons/icon-512.png ]; then
+            convert -size 1080x1920 xc:'#111317' ../icons/icon-512.png -gravity center -geometry 360x360+0+0 -composite splash.png || true
+            [ -f splash.png ] && find android/app/src/main/res -name 'splash.png' -exec cp splash.png {} \; || true
+          fi
+
+      - name: Compilar
+        run: |
+          cd build/android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Firmar
+        run: |
+          cd build
+          cat > firma.b64 <<'KEY'
+          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
+          KEY
+          base64 -d firma.b64 > firma.p12
+          BT="$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)"
+          "$BT/zipalign" -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk alineada.apk
+          "$BT/apksigner" sign --ks firma.p12 --ks-type PKCS12 --ks-pass pass:barralibre2026 --ks-key-alias barralibre --key-pass pass:barralibre2026 --out barra-libre.apk alineada.apk
+          "$BT/apksigner" verify barra-libre.apk
+
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "app-v${{ github.run_number }}" build/barra-libre.apk \
+            --repo "${{ github.repository }}" \
+            --title "App Android ${{ github.run_number }}" \
+            --notes "App de Android de Barra Libre con Health Connect. Descargá barra-libre.apk e instalala en el teléfono." \
+            --latest
