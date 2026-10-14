@@ -31,7 +31,9 @@ jobs:
         run: |
           mkdir -p build && cd build
           npm init -y > /dev/null
-          npm install @capacitor/core@8.5.3 @capacitor/cli@8.5.3 @capacitor/android@8.5.3 @capgo/capacitor-health@8.11.8
+          npm install @capacitor/core@8.5.3 @capacitor/cli@8.5.3 @capacitor/android@8.5.3 @capgo/capacitor-health@8.11.8 \
+            @capacitor-community/background-geolocation@1.2.26 @capacitor/local-notifications@8.3.1 @capacitor/app-launcher@8.0.1 \
+            @capacitor/filesystem@8.1.3 @capacitor/share@8.0.2
           mkdir -p www
           cat > www/index.html <<'HTML'
           <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Barra Libre</title></head>
@@ -45,8 +47,10 @@ jobs:
           <h1>Barra Libre: política de privacidad</h1>
           <p>Barra Libre es una app personal y gratuita de entrenamiento. No tiene publicidad, no vende datos y no los comparte con terceros.</p>
           <h2>Datos de salud (Health Connect)</h2>
-          <p>Si das permiso, la app de Android lee de Health Connect: pasos, frecuencia cardíaca, frecuencia cardíaca en reposo, sueño, peso, VO2máx y entrenamientos. Solo se leen; la app no escribe datos en Health Connect.</p>
+          <p>Si das permiso, la app de Android lee de Health Connect: pasos, frecuencia cardíaca, frecuencia cardíaca en reposo, sueño, peso, grasa corporal, altura, VO2máx y entrenamientos. Solo se leen; la app no escribe datos en Health Connect.</p>
           <p>Se usan únicamente para mostrarte tus estadísticas dentro de Barra Libre (pasos por día, sueño, zonas de frecuencia cardíaca y carga de entrenamiento).</p>
+          <h2>Ubicación (GPS)</h2>
+          <p>Solo cuando tocás "Grabar" en Cardio, la app usa la ubicación del teléfono para dibujar el recorrido de esa salida, también con la pantalla apagada (vas a ver un aviso fijo mientras graba). Al terminar se deja de usar. El recorrido se guarda en tu cuenta y solo lo ves vos. Para corregir la altura, las coordenadas del recorrido se envían sin tu nombre al servicio público Open-Meteo.</p>
           <h2>Dónde se guardan</h2>
           <p>Los resúmenes se guardan en tu cuenta personal de Barra Libre (Google Firebase), protegida por tu usuario: solo vos podés leerlos. Si usás la app sin cuenta, quedan solo en tu teléfono.</p>
           <h2>Cómo quitar el acceso o borrar datos</h2>
@@ -61,7 +65,7 @@ jobs:
             "appName": "Barra Libre",
             "webDir": "www",
             "server": { "url": "https://matiasignaciomarquez-ops.github.io/barra-libre/" },
-            "android": { "backgroundColor": "#111317" }
+            "android": { "backgroundColor": "#111317", "useLegacyBridge": true }
           }
           JSON
           npx cap add android
@@ -70,6 +74,9 @@ jobs:
           sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/' android/variables.gradle
           # permiso para leer más de 30 días de historial
           sed -i 's#<application#<uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />\n    <application#' android/app/src/main/AndroidManifest.xml
+          # apps de relojes que Barra Libre puede abrir para forzar la sincronización (Android 11 o más nuevo)
+          sed -i 's#<application#<queries><package android:name="com.mi.health" /><package android:name="com.xiaomi.wearable" /><package android:name="com.garmin.android.apps.connectmobile" /><package android:name="com.sec.android.app.shealth" /><package android:name="com.huami.watch.hmwatchmanager" /><package android:name="com.xiaomi.hm.health" /><package android:name="com.huawei.health" /><package android:name="com.fitbit.FitbitMobile" /></queries>\n    <application#' android/app/src/main/AndroidManifest.xml
+          grep -c "queries" android/app/src/main/AndroidManifest.xml
           # número de versión = número de compilación
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.${{ github.run_number }}\"/" android/app/build.gradle
           # ícono y pantalla de inicio de Barra Libre
