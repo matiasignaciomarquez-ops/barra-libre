@@ -105,8 +105,10 @@ function buildPlan(EX, prof){
     const items = [];
     for (const [pat, role, v] of slots) {
       if (items.length >= maxEx) break;
-      const id = pick(EX, pat, v, equip, used, goal);
+      let id = pick(EX, pat, v, equip, used, goal);
       if (!id) continue;
+      // principiantes: sin ejercicios colgados de la barra en el core (exigen agarre y control avanzado)
+      if (level === 'beg' && pat === 'core' && /^Hanging_/.test(id)) id = !used.has('Plank') && EX.Plank ? 'Plank' : (!used.has('Dead_Bug') && EX.Dead_Bug ? 'Dead_Bug' : id);
       used.add(id);
       const ex = EX[id];
       const pr = prescribe(goal, role, level, ex);

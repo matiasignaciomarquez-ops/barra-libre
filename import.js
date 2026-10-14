@@ -163,7 +163,8 @@ App.acts.hevyGo = async () => {
 };
 
 // ---------- importación masiva: ZIP de Strava, varios GPX/TCX ----------
-const STRAVA_TYPE = t => /run|carrera|correr|trote/i.test(t) ? 'run' : /ride|bik|cycl|bici|ciclismo/i.test(t) ? 'ride' : /hike|walk|caminata|senderismo|excursi|trek/i.test(t) ? 'hike' : /yoga/i.test(t) ? 'yoga' : null;
+const STRAVA_CTYPE = t => /crossfit|cross/i.test(t) ? 'cross' : /hiit|alta intensidad/i.test(t) ? 'hiit' : /pilates/i.test(t) ? 'pilates' : /spin/i.test(t) ? 'spinning' : /box/i.test(t) ? 'box' : /dance|baile|zumba/i.test(t) ? 'baile' : /funcional|functional/i.test(t) ? 'funcional' : 'otra';
+const STRAVA_TYPE = t => /crossfit|hiit|workout|entrenamiento|functional|funcional|pilates|zumba|dance|baile|boxing|box/i.test(t) && !/weight|pesas|virtual ?run/i.test(t) ? 'class' : /run|carrera|correr|trote/i.test(t) ? 'run' : /ride|bik|cycl|bici|ciclismo/i.test(t) ? 'ride' : /hike|walk|caminata|senderismo|excursi|trek/i.test(t) ? 'hike' : /yoga/i.test(t) ? 'yoga' : null;
 async function gunzipBytes(blob){
   if (!window.DecompressionStream) throw new Error('gz');
   return new Uint8Array(await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
@@ -225,9 +226,9 @@ async function bulkImport(files){
       for (const r of csvRows) {
         const sport = STRAVA_TYPE(r.type || '');
         if (!sport) { skipped[r.type || 'Otro'] = (skipped[r.type || 'Otro'] || 0) + 1; continue; }
-        const it = {id: 'strava_' + r.id, sport, date: r.date ? toLocalStr(r.date) : null, title: r.name, distKm: r.distKm, durSec: r.durSec, hr: r.hr, hrMax: r.hrMax, elev: r.elev, track: null, splits: null};
+        const it = {id: 'strava_' + r.id, sport, stype: r.type || '', date: r.date ? toLocalStr(r.date) : null, title: r.name, distKm: r.distKm, durSec: r.durSec, hr: r.hr, hrMax: r.hrMax, elev: r.elev, track: null, splits: null};
         const key = Object.keys(fileTexts).find(k => r.file && (r.file === k || r.file.endsWith(k) || k.endsWith(r.file.replace(/^activities\//,''))));
-        if (key && sport !== 'yoga') { try { const t = parseTrack(fileTexts[key], sport); it.track = t.res.track; it.splits = t.res.splits; } catch(e){} }
+        if (key && sport !== 'yoga' && sport !== 'class') { try { const t = parseTrack(fileTexts[key], sport); it.track = t.res.track; it.splits = t.res.splits; } catch(e){} }
         if (it.date) items.push(it);
       }
     } else {
@@ -252,7 +253,7 @@ App.views.sh_bulk = (p, sh) => {
     <div class="kpis"><div class="kpi"><b style="color:var(--run)">${c('run')}</b><span>carreras</span></div><div class="kpi"><b style="color:var(--ride)">${c('ride')}</b><span>en bici</span></div><div class="kpi"><b style="color:var(--hike)">${c('hike')}</b><span>trekking</span></div><div class="kpi"><b>${it.filter(x => x.track).length}</b><span>con recorrido</span></div></div>
     <p class="small muted">Del ${fmtDate(it[0].date,{day:'numeric',month:'short',year:'numeric'})} al ${fmtDate(it[it.length-1].date,{day:'numeric',month:'short',year:'numeric'})}.${already ? ` ${already} ya estaban y se actualizan, sin duplicarse.` : ''}</p>
     ${sk.length ? `<p class="small muted">No se importan (otros deportes): ${sk.map(([k,v]) => esc(k) + ' ' + v).join(', ')}.</p>` : ''}
-    ${c('yoga') ? `<p class="small muted">Además, ${c('yoga')} sesiones de yoga.</p>` : ''}
+    ${c('yoga') || c('class') ? `<p class="small muted">Además: ${[c('yoga') ? c('yoga') + ' de yoga' : '', c('class') ? c('class') + ' clases (Crossfit, HIIT, etc.)' : ''].filter(Boolean).join(' y ')}.</p>` : ''}
     ${sh.noRoute ? `<p class="small muted">${sh.noRoute} archivos FIT no se pudieron leer: se importan los datos del resumen (distancia, tiempo, FC) pero sin el mapa del recorrido.</p>` : ''}
     <p class="small">Se cargan en el perfil de <b>${esc(p.name)}</b>. Después podés editar el tipo (rodaje, fondo, series…) y el esfuerzo de cada una.</p>
     ${sh.busy ? `<div class="progress"><i style="width:${sh.busy}%;background:var(--accent)"></i></div><p class="small muted">Importando…</p>` : `<button class="btn primary" data-act="bulkGo">Importar ${it.length} actividades</button>`}`;
@@ -261,6 +262,7 @@ App.acts.bulkGo = async () => {
   const sh = S.sheet, p = curProfile(); sh.busy = 1; App.renderOverlay(); let n = 0;
   for (const x of sh.items) {
     const prev = Store.get('activities', x.id);
+    if (x.sport === 'class') { await Store.put('activities', {...(prev || {}), id: x.id, pid: p.id, sport: 'class', date: x.date, ctype: (prev && prev.ctype) || STRAVA_CTYPE(x.stype + ' ' + (x.title || '')), title: (prev && prev.title) || x.title || 'Clase', distKm: 0, durSec: x.durSec || 0, hr: x.hr || null, hrMax: x.hrMax || null, rpe: (prev && prev.rpe) || null, notes: (prev && prev.notes) || '', source: 'strava'}); n++; continue; }
     await Store.put('activities', {...(prev || {}), id: x.id, pid: p.id, sport: x.sport, date: x.date, type: (prev && prev.type) || (x.sport === 'yoga' ? null : 'suave'), title: x.sport === 'yoga' ? (x.title || 'Yoga') : (prev && prev.title) || x.title,
       distKm: x.distKm || 0, durSec: x.durSec || 0, hr: x.hr || null, hrMax: x.hrMax || null, elev: x.elev || null, rpe: (prev && prev.rpe) || null, notes: (prev && prev.notes) || x.title || '', track: x.track || (prev && prev.track) || null, splits: x.splits || (prev && prev.splits) || null, source: 'strava'});
     n++; if (n % 10 === 0) { sh.busy = Math.round(n / sh.items.length * 100); App.renderOverlay(); }
