@@ -151,7 +151,19 @@ function fitnessCard(p){
     <p class="tiny muted">${vo.src === 'uth' ? `Estimación con tu FC máx. y en reposo (Uth 2004)${vo.est ? '; la FC máx. sale de tu edad: si la conocés, cargala en Cardio → Mis zonas, o usá las 3 preguntas' : ''}. ` : vo.src === 'nes' ? 'Estimación sin prueba de esfuerzo (modelo NTNU, Nes 2014): error típico ±5–6 ml/kg/min. ' : ''}${vo.src !== 'reloj' ? `<a href="#" data-act="sheet" data-arg="paiQ">${vo.src === 'nes' ? 'Cambiar respuestas' : 'Calcular con 3 preguntas'}</a>. ` : ''}Referencia: VO2máx medido en 3816 adultos sanos de Noruega, por edad y sexo (estudio HUNT 3, Loe 2013). Es una población muy activa, así que la comparación es exigente.</p></div>`;
 }
 const _progFit = App.views.prog;
-App.views.prog = (p) => { const html = _progFit(p); const i = html.indexOf('<div class="stack">'); return i < 0 ? html : html.slice(0, i + 19) + fitnessCard(p) + html.slice(i + 19); };
+function fitnessFold(p){
+  const vo = vo2Of(p), fa = vo && p.sex && p.age ? fitnessAgeOf(p.sex, vo.v) : null;
+  const inner = fitnessCard(p).replace(/^<div class="card stack-s"><div class="row between"><h3>Edad física<\/h3>/, '<div class="stack-s" style="margin-top:10px"><div class="row between"><span class="small muted">Tu edad según tu VO2máx</span>');
+  return `<details class="card" data-keep="fitOpen" ${S.fitOpen ? 'open' : ''}><summary><b>Edad física</b>${fa ? `<span class="pill" style="font-size:11px;margin-left:6px">${fa} años</span>` : ''}</summary>${inner}</details>`;
+}
+App.views.prog = (p) => {
+  const html = _progFit(p), card = fitnessFold(p);
+  const mark = '<div class="section"><h3>Historial de fuerza</h3>'; const i = html.indexOf(mark);
+  if (i >= 0) return html.slice(0, i) + card + html.slice(i);
+  const j = html.lastIndexOf('</div>'); return j < 0 ? html + card : html.slice(0, j) + card + html.slice(j);
+};
+// recordar qué desplegables dejaste abiertos
+document.addEventListener('toggle', e => { const d = e.target; if (d && d.dataset && d.dataset.keep) S[d.dataset.keep] = d.open; }, true);
 
 // ---------- datos para alertas ----------
 const median = a => { const s = a.filter(x => x != null).sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -262,15 +274,17 @@ function hoyCard(p){
   if (al) html += `<div class="banner ${al.level === 'info' ? 'info' : ''} small" style="${al.level === 'urgente' || al.level === 'consulta' ? 'border-color:var(--bad)' : ''}"><div class="grow"><span class="pill ${lvl[al.level][0]}" style="font-size:11px">${lvl[al.level][1]}</span> <b>${esc(al.t)}</b><div style="margin-top:4px">${esc(al.b)}</div><div class="tiny muted" style="margin-top:4px">Fuente: ${esc(refShort(al.ref))}</div></div>${al.level === 'urgente' ? '' : `<button class="iconbtn" data-act="hoyDis" data-arg="a:${esc(al.t)}" aria-label="Ocultar por hoy">${ICON.close}</button>`}</div>`;
   const ch = off.includes('aliento') ? null : cheers(p).filter(c => !dis.includes('c:' + c.t))[0];
   if (ch) html += `<div class="banner small" style="border-color:var(--ok)"><div class="grow"><b style="color:var(--ok)">${esc(ch.t)}</b><div style="margin-top:2px">${esc(ch.b)}</div></div><button class="iconbtn" data-act="hoyDis" data-arg="c:${esc(ch.t)}" aria-label="Ocultar por hoy">${ICON.close}</button></div>`;
-  if (!html) return '';
-  return `<div class="card stack-s"><div class="row between"><h3>Hoy</h3><button class="btn sm ghost" data-act="sheet" data-arg="avisos">Avisos</button></div>${html}
-    ${al ? '<p class="tiny muted">Barra Libre no es un dispositivo médico: estos avisos no reemplazan una consulta.</p>' : ''}</div>`;
+  if (!html) html = '<p class="small muted">Todo en orden por hoy.</p>';
+  const badge = al ? `<span class="pill ${lvl[al.level][0]}" style="font-size:11px;margin-left:6px">${al.level === 'info' ? '1 aviso' : lvl[al.level][1]}</span>` : '';
+  return `<details class="card" data-keep="hoyOpen" ${S.hoyOpen ? 'open' : ''}><summary><b>Bienestar</b>${badge}<span class="small muted" style="font-weight:400"> · avisos y logros</span></summary>
+    <div class="stack-s" style="margin-top:10px">${html}
+    <div class="row between"><span class="tiny muted">${al ? 'Barra Libre no es un dispositivo médico: estos avisos no reemplazan una consulta.' : ''}</span><button class="btn sm ghost" data-act="sheet" data-arg="avisos">Elegir avisos</button></div></div></details>`;
 }
 const _homeHoy = App.views.home;
 App.views.home = (p) => {
   const html = _homeHoy(p); const card = hoyCard(p); if (!card) return html;
-  const mark = '<div class="section" style="margin-top:6px">';
-  return html.includes(mark) ? html.replace(mark, card + mark) : html;
+  const i = html.lastIndexOf('</div>'); // al fondo de Inicio
+  return i < 0 ? html + card : html.slice(0, i) + card + html.slice(i);
 };
 App.acts.hoyFeel = async el => {
   const k = el.dataset.arg;
