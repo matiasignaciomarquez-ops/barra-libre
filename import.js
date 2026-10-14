@@ -163,7 +163,11 @@ App.acts.hevyGo = async () => {
 };
 
 // ---------- importación masiva: ZIP de Strava, varios GPX/TCX ----------
-const STRAVA_TYPE = t => /run|carrera|correr|trote/i.test(t) ? 'run' : /ride|bik|cycl|bici|ciclismo/i.test(t) ? 'ride' : /yoga/i.test(t) ? 'yoga' : null;
+const STRAVA_TYPE = t => /run|carrera|correr|trote/i.test(t) ? 'run' : /ride|bik|cycl|bici|ciclismo/i.test(t) ? 'ride' : /hike|walk|caminata|senderismo|excursi|trek/i.test(t) ? 'hike' : /yoga/i.test(t) ? 'yoga' : null;
+async function gunzipBytes(blob){
+  if (!window.DecompressionStream) throw new Error('gz');
+  return new Uint8Array(await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+}
 async function gunzipText(blob){
   if (!window.DecompressionStream) throw new Error('gz');
   return await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).text();
@@ -206,11 +210,14 @@ async function bulkImport(files){
         const csvF = Object.keys(zip.files).find(n => /(^|\/)activities\.csv$/i.test(n));
         if (csvF) csvRows = stravaCSV(await zip.file(csvF).async('string')) || null;
         for (const n of Object.keys(zip.files)) {
-          if (!/\.(gpx|tcx)(\.gz)?$/i.test(n)) { if (/\.fit(\.gz)?$/i.test(n)) noRoute++; continue; }
+          if (/\.fit(\.gz)?$/i.test(n)) { try { const b = await zip.file(n).async('uint8array'); fileTexts[n.replace(/^.*?(activities\/)/i, '$1')] = {fit: /\.gz$/i.test(n) ? await gunzipBytes(new Blob([b])) : b}; } catch(e){ noRoute++; } continue; }
+          if (!/\.(gpx|tcx)(\.gz)?$/i.test(n)) continue;
           const u8 = await zip.file(n).async('uint8array');
           try { fileTexts[n.replace(/^.*?(activities\/)/i, '$1')] = /\.gz$/i.test(n) ? await gunzipText(new Blob([u8])) : new TextDecoder().decode(u8); } catch(e){}
         }
-      } else if (/\.gz$/i.test(f.name)) { try { fileTexts[f.name] = await gunzipText(f); } catch(e){} }
+      } else if (/\.fit\.gz$/i.test(f.name)) { try { fileTexts[f.name] = {fit: await gunzipBytes(f)}; } catch(e){} }
+      else if (/\.fit$/i.test(f.name)) fileTexts[f.name] = {fit: new Uint8Array(await f.arrayBuffer())};
+      else if (/\.gz$/i.test(f.name)) { try { fileTexts[f.name] = await gunzipText(f); } catch(e){} }
       else if (/\.(gpx|tcx)$/i.test(f.name)) fileTexts[f.name] = await f.text();
       else if (/activities\.csv$/i.test(f.name)) csvRows = stravaCSV(await f.text()) || null;
     }
@@ -242,10 +249,11 @@ App.views.sh_bulk = (p, sh) => {
   const already = it.filter(x => Store.get('activities', x.id)).length;
   const sk = Object.entries(sh.skipped || {});
   return `<h2>Importar actividades</h2>
-    <div class="kpis"><div class="kpi"><b style="color:var(--run)">${c('run')}</b><span>carreras</span></div><div class="kpi"><b style="color:var(--ride)">${c('ride')}</b><span>en bici</span></div><div class="kpi"><b style="color:var(--yoga)">${c('yoga')}</b><span>yoga</span></div><div class="kpi"><b>${it.filter(x => x.track).length}</b><span>con recorrido</span></div></div>
+    <div class="kpis"><div class="kpi"><b style="color:var(--run)">${c('run')}</b><span>carreras</span></div><div class="kpi"><b style="color:var(--ride)">${c('ride')}</b><span>en bici</span></div><div class="kpi"><b style="color:var(--hike)">${c('hike')}</b><span>trekking</span></div><div class="kpi"><b>${it.filter(x => x.track).length}</b><span>con recorrido</span></div></div>
     <p class="small muted">Del ${fmtDate(it[0].date,{day:'numeric',month:'short',year:'numeric'})} al ${fmtDate(it[it.length-1].date,{day:'numeric',month:'short',year:'numeric'})}.${already ? ` ${already} ya estaban y se actualizan, sin duplicarse.` : ''}</p>
     ${sk.length ? `<p class="small muted">No se importan (otros deportes): ${sk.map(([k,v]) => esc(k) + ' ' + v).join(', ')}.</p>` : ''}
-    ${sh.noRoute ? `<p class="small muted">${sh.noRoute} archivos FIT: se importan los datos (distancia, tiempo, FC) pero sin el mapa del recorrido.</p>` : ''}
+    ${c('yoga') ? `<p class="small muted">Además, ${c('yoga')} sesiones de yoga.</p>` : ''}
+    ${sh.noRoute ? `<p class="small muted">${sh.noRoute} archivos FIT no se pudieron leer: se importan los datos del resumen (distancia, tiempo, FC) pero sin el mapa del recorrido.</p>` : ''}
     <p class="small">Se cargan en el perfil de <b>${esc(p.name)}</b>. Después podés editar el tipo (rodaje, fondo, series…) y el esfuerzo de cada una.</p>
     ${sh.busy ? `<div class="progress"><i style="width:${sh.busy}%;background:var(--accent)"></i></div><p class="small muted">Importando…</p>` : `<button class="btn primary" data-act="bulkGo">Importar ${it.length} actividades</button>`}`;
 };

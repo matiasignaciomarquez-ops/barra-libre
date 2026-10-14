@@ -18,7 +18,7 @@ function routeSVG(track, color, cls){
 const speed = a => a.durSec ? a.distKm / (a.durSec / 3600) : 0;
 function actMetric(a){
   if (a.sport === 'run') return a.distKm ? `${L.paceStr(a.durSec / a.distKm)} /km` : '';
-  if (a.sport === 'ride') return a.durSec && a.distKm ? `${fmtNum(speed(a),1)} km/h` : '';
+  if (a.sport === 'ride' || a.sport === 'hike') return a.durSec && a.distKm ? `${fmtNum(speed(a),1)} km/h` : '';
   return '';
 }
 function activityItem(a){
@@ -28,7 +28,7 @@ function activityItem(a){
   return `<div class="it" data-act="sheet" data-arg="actDetail" data-extra='${esc(JSON.stringify({id:a.id}))}'>
     ${sp !== 'yoga' ? routeSVG(a.track, SP[sp].color) : `<span class="pill yoga">Yoga</span>`}
     <div class="grow"><b>${esc(title)}</b><div class="small muted num">${fmtDate(a.date)} · ${main}${actMetric(a) ? ' · ' + actMetric(a) : ''}</div></div>
-    ${sp !== 'yoga' ? `<span class="pill ${sp}">${sp==='run'?'Running':'Bici'}</span>` : ''}</div>`;
+    ${sp !== 'yoga' ? `<span class="pill ${sp}">${sp==='run'?'Running':sp==='hike'?'Trekking':'Bici'}</span>` : ''}</div>`;
 }
 
 App.views.cardio = (p) => {
@@ -61,7 +61,7 @@ App.views.cardio = (p) => {
   return `<div class="stack">
     <div class="seg" role="group" aria-label="Deporte">${Object.entries(SP).map(([k,v]) => `<button data-act="seg" data-key="cardio" data-arg="${k}" aria-pressed="${sp===k}">${v.label}</button>`).join('')}</div>
     <div class="row"><button class="btn primary grow" data-act="logAct" data-arg="${sp}">Registrar ${sp==='run'?'carrera':'salida'}</button>
-      <label class="btn grow" for="trk">Importar archivos</label><input id="trk" type="file" accept=".gpx,.tcx,.zip,.gz,application/gpx+xml,application/xml,text/xml,application/zip" multiple hidden data-change="importTrack"></div>
+      <label class="btn grow" for="trk">Importar archivos</label><input id="trk" type="file" accept=".gpx,.tcx,.fit,.zip,.gz,application/gpx+xml,application/xml,text/xml,application/zip,application/vnd.ant.fit,application/octet-stream" multiple hidden data-change="importTrack"></div>
     <div class="kpis"><div class="kpi"><b style="color:var(${cfg.color})">${fmtNum(thisW,1)}</b><span>km esta semana</span></div><div class="kpi"><b>${fmtNum(avg4,1)}</b><span>km/sem promedio (4 sem.)</span></div><div class="kpi"><b>${fmtNum(monthKm,0)}</b><span>km este mes</span></div><div class="kpi"><b>${acts.length}</b><span>${sp==='run'?'carreras':'salidas'} totales</span></div></div>
     <div class="card stack-s"><h3>Kilómetros por semana</h3><div class="chartbox"><canvas id="wkch" aria-label="Kilómetros por semana, últimas 12 semanas"></canvas></div></div>
     ${trend.length > 1 ? `<div class="card stack-s"><h3>${sp==='run'?'Ritmo (min/km, arriba = más rápido)':'Velocidad media (km/h)'}</h3><div class="chartbox"><canvas id="trch"></canvas></div></div>` : ''}
@@ -76,6 +76,7 @@ App.views.cardio = (p) => {
 };
 
 function cardioPlanView(p, sp){
+  if (sp === 'hike') return '';
   const key = sp === 'run' ? 'runPlan' : 'ridePlan'; const rp = p[key];
   if (!rp) return `<div class="card stack-s"><h3>Plan de ${sp==='run'?'running':'ciclismo'}</h3><p class="small muted">Armá un plan progresivo: aumentos de volumen graduales, semana liviana cada cuatro y la mayor parte del tiempo a ritmo suave.</p><button class="btn" data-act="sheet" data-arg="planBuild" data-extra='{"sp":"${sp}"}'>Armar plan</button></div>`;
   const cw = curPlanWeek(rp);
@@ -119,13 +120,13 @@ App.acts.pbMake = () => {
 // ---------- registrar / editar ----------
 App.acts.logAct = el => {
   const sp = el.dataset.arg;
-  App.openSheet('act', {f: {id: null, sport: sp, date: todayISO(), type: el.dataset.type || 'suave', distKm: el.dataset.km || '', dur: '', hr: '', rpe: '', elev: '', notes: '', power: ''}});
+  App.openSheet('act', {f: {id: null, sport: sp, date: todayISO(), type: el.dataset.type || (sp === 'hike' ? 'caminata' : 'suave'), distKm: el.dataset.km || '', dur: '', hr: '', rpe: '', elev: '', notes: '', power: ''}});
 };
 App.views.sh_act = (p, sh) => {
-  const f = sh.f; const types = f.sport === 'run' ? L.RUN_TYPES : L.RIDE_TYPES;
+  const f = sh.f; const types = SP[f.sport] ? SP[f.sport].types() : L.RIDE_TYPES;
   const durS = L.parseDur(f.dur), dist = num(f.distKm) || 0;
   const live = durS && dist ? (f.sport === 'run' ? `${L.paceStr(durS/dist)} /km` : `${fmtNum(dist/(durS/3600),1)} km/h`) : '';
-  return `<h2>${f.id ? 'Editar' : 'Registrar'} ${f.sport==='run'?'carrera':'salida en bici'}</h2>
+  return `<h2>${f.id ? 'Editar' : 'Registrar'} ${f.sport==='run'?'carrera':f.sport==='hike'?'caminata o trekking':'salida en bici'}</h2>
   ${f.track ? `<div class="row">${routeSVG(f.track, SP[f.sport].color)}<p class="small muted grow">Importado del archivo: recorrido${f.splits && f.splits.length ? ', parciales por km' : ''}${f.hr ? ', frecuencia cardíaca' : ''}.</p></div>` : ''}
   <div class="grid2"><div class="field"><label for="a_date">Fecha</label><input id="a_date" type="date" value="${esc(f.date.slice(0,10))}" data-bind="af" data-k="date"></div>
   <div class="field"><label for="a_type">Tipo</label><select id="a_type" data-change="af" data-k="type">${Object.entries(types).map(([k,v]) => `<option value="${k}" ${f.type===k?'selected':''}>${v}</option>`).join('')}</select></div>
@@ -167,10 +168,10 @@ function parseTrack(text, defSport){
   if (trk.length) {
     for (const n of trk) { pts.push({lat: +n.getAttribute('lat'), lon: +n.getAttribute('lon'), ele: tag(n,'ele') != null ? +tag(n,'ele') : null, time: tag(n,'time') ? Date.parse(tag(n,'time')) : null});
       const h = n.getElementsByTagNameNS('*','hr')[0]; if (h) hrs.push(+h.textContent); }
-    const ty = tag(xml, 'type'); if (ty && /bik|cycl|ride/i.test(ty)) sport = 'ride'; if (ty && /run/i.test(ty)) sport = 'run';
+    const ty = tag(xml, 'type'); if (ty && /bik|cycl|ride/i.test(ty)) sport = 'ride'; if (ty && /run/i.test(ty)) sport = 'run'; if (ty && /hik|walk|trek/i.test(ty)) sport = 'hike';
   } else {
     const act = xml.getElementsByTagName('Activity')[0];
-    if (act) { const s = act.getAttribute('Sport') || ''; if (/bik/i.test(s)) sport = 'ride'; if (/run/i.test(s)) sport = 'run'; }
+    if (act) { const s = act.getAttribute('Sport') || ''; if (/bik/i.test(s)) sport = 'ride'; if (/run/i.test(s)) sport = 'run'; if (/hik|walk/i.test(s)) sport = 'hike'; }
     for (const n of xml.getElementsByTagName('Trackpoint')) {
       const la = tag(n,'LatitudeDegrees'), lo = tag(n,'LongitudeDegrees');
       const h = n.getElementsByTagName('HeartRateBpm')[0]; if (h) hrs.push(+tag(h,'Value'));
@@ -210,8 +211,8 @@ App.views.sh_actDetail = (p, sh) => {
   const a = Store.get('activities', sh.id); if (!a) return '<p>No encontrado.</p>';
   if (a.sport === 'yoga') return yogaDetail(a, sh);
   const cfg = SP[a.sport]; const col = cssv(cfg.color);
-  if (a.splits && a.splits.length > 1) chartLater('spch', () => ({type:'bar', data:{labels: a.splits.map((_,i) => 'km ' + (i+1)), datasets:[{data: a.splits.map(s => a.sport === 'run' ? +(s/60).toFixed(2) : +(3600/s).toFixed(1)), backgroundColor: col, borderRadius:3}]},
-    options: baseOpts({scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:8}}, y:{beginAtZero:false, ticks:{maxTicksLimit:4, callback: v => a.sport === 'run' ? L.paceStr(v*60) : v}}}, plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => a.sport === 'run' ? L.paceStr(c.parsed.y*60) + ' /km' : c.parsed.y + ' km/h'}}}})}));
+  if (a.splits && a.splits.length > 1) chartLater('spch', () => ({type:'bar', data:{labels: a.splits.map((_,i) => 'km ' + (i+1)), datasets:[{data: a.splits.map(s => a.sport !== 'ride' ? +(s/60).toFixed(2) : +(3600/s).toFixed(1)), backgroundColor: col, borderRadius:3}]},
+    options: baseOpts({scales:{x:{grid:{display:false}, ticks:{maxTicksLimit:8}}, y:{beginAtZero:false, ticks:{maxTicksLimit:4, callback: v => a.sport !== 'ride' ? L.paceStr(v*60) : v}}}, plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => a.sport !== 'ride' ? L.paceStr(c.parsed.y*60) + ' /km' : c.parsed.y + ' km/h'}}}})}));
   return `<div><span class="label">${fmtDate(a.date,{weekday:'long',day:'numeric',month:'long'})}</span><h2>${esc(cfg.types()[a.type] || cfg.label)}</h2></div>
   ${a.track ? routeSVG(a.track, cfg.color, 'bigroute').replace('class="route bigroute"', 'class="route bigroute" style="width:100%;height:auto;aspect-ratio:1.4;max-height:260px"') : ''}
   <div class="kpis"><div class="kpi"><b>${fmtNum(a.distKm,2)}</b><span>km</span></div><div class="kpi"><b style="font-size:20px">${L.durStr(a.durSec)}</b><span>tiempo</span></div><div class="kpi"><b style="font-size:20px">${actMetric(a).split(' ')[0] || '–'}</b><span>${a.sport==='run'?'min/km':'km/h'}</span></div><div class="kpi"><b>${a.hr || '–'}</b><span>FC media</span></div></div>

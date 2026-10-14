@@ -149,7 +149,7 @@ window.heatmap = function(ws, acts){
 App.acts.expActs = () => {
   const pname = id => (Store.get('profiles', id) || {}).name || '';
   const rows = [['fecha','perfil','deporte','tipo','distancia_km','duracion','ritmo_min_km','velocidad_kmh','fc_media','rpe','desnivel_m','carga','notas']];
-  Store.list('activities').sort((a,b) => a.date.localeCompare(b.date)).forEach(a => rows.push([localDay(a.date), pname(a.pid), {run:'running',ride:'ciclismo',yoga:'yoga',class:'clase'}[a.sport] || a.sport, a.sport === 'class' ? classLabel(a) : (a.type||a.style||''), a.distKm||'', L.durStr(a.durSec), a.sport==='run'&&a.distKm?L.paceStr(a.durSec/a.distKm):'', a.sport==='ride'&&a.durSec?(a.distKm/(a.durSec/3600)).toFixed(1):'', a.hr||'', a.rpe||'', a.elev||'', a.sport==='class' ? (classLoad(a)||'') : '', a.notes||'']));
+  Store.list('activities').sort((a,b) => a.date.localeCompare(b.date)).forEach(a => rows.push([localDay(a.date), pname(a.pid), {run:'running',ride:'ciclismo',hike:'senderismo',yoga:'yoga',class:'clase'}[a.sport] || a.sport, a.sport === 'class' ? classLabel(a) : (a.type||a.style||''), a.distKm||'', L.durStr(a.durSec), a.sport==='run'&&a.distKm?L.paceStr(a.durSec/a.distKm):'', a.sport==='ride'&&a.durSec?(a.distKm/(a.durSec/3600)).toFixed(1):'', a.hr||'', a.rpe||'', a.elev||'', a.sport==='class' ? (classLoad(a)||'') : '', a.notes||'']));
   saveFile('barra-libre-actividades.csv', '﻿' + csv(rows));
 };
 const _progView = App.views.prog;

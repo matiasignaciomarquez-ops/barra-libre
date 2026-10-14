@@ -6,7 +6,7 @@ Store.data.health = Store.data.health || {};
 
 const HC = {
   plugin: (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.Health) || null,
-  READ: ['steps', 'heartRate', 'restingHeartRate', 'sleep', 'weight', 'workouts', 'vo2Max'],
+  READ: ['steps', 'heartRate', 'restingHeartRate', 'sleep', 'weight', 'workouts', 'vo2Max', 'bodyFat', 'height'],
   APK: 'https://github.com/matiasignaciomarquez-ops/barra-libre/releases/latest/download/barra-libre.apk',
   busy: false,
   get last(){ return ls.get('bl_hc_last_' + S.pid, null); },
@@ -81,7 +81,11 @@ async function hcSync(manual){
   }
   // peso
   const wt = await safe(() => H.readSamples({dataType: 'weight', ...range, limit: 200, ascending: true}));
-  for (const s of (wt && wt.samples || [])) { const d = hcDay(s.startDate), id = p.id + '_' + d; if (!Store.get('body', id) && s.value > 20) { await Store.put('body', {id, pid: p.id, date: d, kg: Math.round(s.value * 10) / 10, src: 'hc'}); res.w++; } }
+  for (const s of (wt && wt.samples || [])) { const d = hcDay(s.startDate), id = p.id + '_' + d, prev = Store.get('body', id); if ((!prev || prev.kg == null) && s.value > 20) { await Store.put('body', {...(prev || {}), id, pid: p.id, date: d, kg: Math.round(s.value * 10) / 10, src: (prev && prev.src) || 'hc'}); res.w++; } }
+  // grasa corporal (balanza) y altura
+  const bf = await safe(() => H.readSamples({dataType: 'bodyFat', ...range, limit: 200, ascending: true}));
+  for (const s of (bf && bf.samples || [])) { let v = s.value; if (v > 0 && v <= 1) v *= 100; const d = hcDay(s.startDate), id = p.id + '_' + d, prev = Store.get('body', id); if (v > 2 && v < 70 && (!prev || prev.fat == null)) await Store.put('body', {...(prev || {}), id, pid: p.id, date: d, fat: Math.round(v * 10) / 10, src: (prev && prev.src) || 'hc'}); }
+  if (!p.height) { const ht = await safe(() => H.readSamples({dataType: 'height', ...range, limit: 20, ascending: false})); const h = ht && ht.samples && ht.samples[0] && ht.samples[0].value; const cm = h ? Math.round(h < 3 ? h * 100 : h) : null; if (cm >= 100 && cm <= 250) await Store.put('profiles', {...curProfile(), height: cm}); }
   // FC durante los entrenamientos de fuerza que no la tienen
   for (const w of workoutsOf(p.id).filter(w => new Date(w.date) >= from && !w.hrAvg && w.durSec)) {
     const end = new Date(new Date(w.date).getTime() + w.durSec * 1000).toISOString();
@@ -90,7 +94,7 @@ async function hcSync(manual){
     if (v.length >= 5) { await Store.put('workouts', {...w, hrAvg: Math.round(v.reduce((a, b) => a + b, 0) / v.length), hrMax: Math.round(Math.max(...v)), hrSrc: 'hc'}); res.wk++; }
   }
   // pulso, zonas y cadencia en running, bici, clases y yoga
-  for (const a of actsOf(p.id).filter(a => new Date(a.date) >= from && a.durSec && !a.hrS && ['run', 'ride', 'class', 'yoga'].includes(a.sport))) {
+  for (const a of actsOf(p.id).filter(a => new Date(a.date) >= from && a.durSec && !a.hrS && ['run', 'ride', 'hike', 'class', 'yoga'].includes(a.sport))) {
     const s = actStreams(a).hr; if (s.length >= 10) continue;
     if (await safe(() => hcEnrichAct(a, H))) res.wk++;
   }
@@ -102,15 +106,15 @@ async function hcSync(manual){
   if (manual) toast(`Sincronizado: ${Object.keys(days).length} días${res.sleep ? ` · ${res.sleep} noches de sueño` : ''}${res.wk ? ` · pulso en ${res.wk} entrenamientos` : ''}`);
   App.refresh();
 }
-// sincroniza sola al abrir la app (cada 30 minutos como máximo)
-function hcAuto(){ if (HC.plugin && HC.on && curProfile() && (!HC.last || Date.now() - new Date(HC.last) > 30 * 60000)) hcSync(false); }
+// sincroniza sola cada vez que abrís o volvés a la app (como máximo cada 3 minutos; al volver de la app del reloj, siempre)
+function hcAuto(){ if (HC.plugin && HC.on && curProfile() && (HC.force || !HC.last || Date.now() - new Date(HC.last) > 3 * 60000)) { HC.force = false; hcSync(!!HC.forceMsg); HC.forceMsg = false; } }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(hcAuto, 1500); });
 
 // ---------- entrenamientos del reloj ----------
 const HC_MAP = {running:['run','suave'], runningTreadmill:['run','suave'], trackAndField:['run','series'], cycling:['ride','suave'], bikingStationary:['ride','rodillo'], handCycling:['ride','suave'],
   yoga:['yoga','hatha'], pilates:['class','pilates'], highIntensityIntervalTraining:['class','hiit'], crossTraining:['class','cross'], functionalStrengthTraining:['class','funcional'], bootCamp:['class','funcional'],
   boxing:['class','box'], kickboxing:['class','box'], martialArts:['class','box'], dance:['class','baile'], dancing:['class','baile'], cardioDance:['class','baile'], socialDance:['class','baile'],
-  mixedCardio:['class','funcional'], exerciseClass:['class','funcional'], stepTraining:['class','funcional'], elliptical:['class','otra'], rowingMachine:['class','otra'], walking:['class','otra'], hiking:['class','otra'], swimming:['class','otra'], swimmingPool:['class','otra']};
+  mixedCardio:['class','funcional'], exerciseClass:['class','funcional'], stepTraining:['class','funcional'], elliptical:['class','otra'], rowingMachine:['class','otra'], walking:['hike','caminata'], hiking:['hike','trekking'], swimming:['class','otra'], swimmingPool:['class','otra']};
 const HC_NAME = {walking:'Caminata', hiking:'Caminata / trekking', elliptical:'Elíptico', rowingMachine:'Remo (máquina)', swimming:'Natación', swimmingPool:'Natación'};
 const isStrength = t => /strength|weightlifting|calisthenics|coreTraining/i.test(t);
 function hcDup(x){
@@ -135,7 +139,7 @@ function hcLabel(x){
   const m = HC_MAP[x.workoutType];
   if (isStrength(x.workoutType)) return 'Fuerza';
   if (!m) return 'Otro';
-  if (m[0] === 'run') return 'Running'; if (m[0] === 'ride') return 'Ciclismo'; if (m[0] === 'yoga') return 'Yoga';
+  if (m[0] === 'run') return 'Running'; if (m[0] === 'ride') return 'Ciclismo'; if (m[0] === 'hike') return x.workoutType === 'walking' ? 'Caminata' : 'Trekking'; if (m[0] === 'yoga') return 'Yoga';
   return HC_NAME[x.workoutType] || CLASS_TYPES[m[1]] || 'Clase';
 }
 App.views.sh_hcWorkouts = () => {
@@ -154,7 +158,7 @@ App.acts.hcAdd = async el => {
   const m = HC_MAP[x.workoutType] || ['class', 'otra'];
   const base = {id: 'hc_' + String(x._id).replace(/[^a-zA-Z0-9]/g, '').slice(-40), pid: p.id, date: x.startDate, durSec: Math.round(x.duration), src: 'hc', notes: 'Importado del reloj'};
   let a;
-  if (m[0] === 'run' || m[0] === 'ride') a = {...base, sport: m[0], type: m[1], distKm: x.totalDistance ? Math.round(x.totalDistance / 10) / 100 : 0};
+  if (m[0] === 'run' || m[0] === 'ride' || m[0] === 'hike') a = {...base, sport: m[0], type: m[1], distKm: x.totalDistance ? Math.round(x.totalDistance / 10) / 100 : 0};
   else if (m[0] === 'yoga') a = {...base, sport: 'yoga', style: m[1], title: 'Yoga (reloj)', distKm: 0};
   else { const title = HC_NAME[x.workoutType] || (classTypes(p)[m[1]] || 'Clase'); a = {...base, sport: 'class', ctype: m[1], title, kcal: x.totalEnergyBurned ? Math.round(x.totalEnergyBurned) : null, distKm: 0}; }
   await Store.put('activities', a); try { await hcEnrichAct(a, H); } catch(e){} HC.ignore(x._id); App.renderOverlay(); App.refresh();
@@ -182,8 +186,16 @@ window.stepsCard = function(p){
       <div class="kpi"><b>${sl && sl.deep != null && sl.sleepMin ? Math.round(sl.deep / sl.sleepMin * 100) + '%' : '–'}</b><span>sueño profundo</span></div>
     </div>
     ${pend ? `<button class="btn" data-act="sheet" data-arg="hcWorkouts">${pend} entrenamiento${pend > 1 ? 's' : ''} del reloj para revisar</button>` : ''}
+    ${HC.watchApp ? `<button class="btn sm" data-act="hcWatchApp">Actualizar desde ${esc(HC.watchApp.name)}</button><p class="tiny muted">Abre ${esc(HC.watchApp.name)} para que baje los datos de la pulsera; al volver, Barra Libre los trae solos.</p>` : ''}
     <div class="row"><button class="btn sm grow" data-act="hcSyncNow">${HC.busy ? 'Sincronizando…' : 'Sincronizar ahora'}</button><button class="btn sm ghost" data-act="hcSettings">Permisos</button></div></div>`;
 };
+// app del reloj instalada (Mi Fitness, Garmin Connect, Samsung Health, Zepp, Huawei, Fitbit)
+const WATCH_APPS = [['com.mi.health', 'Mi Fitness'], ['com.xiaomi.wearable', 'Mi Fitness'], ['com.garmin.android.apps.connectmobile', 'Garmin Connect'], ['com.sec.android.app.shealth', 'Samsung Health'], ['com.huami.watch.hmwatchmanager', 'Zepp'], ['com.xiaomi.hm.health', 'Zepp Life'], ['com.huawei.health', 'Huawei Salud'], ['com.fitbit.FitbitMobile', 'Fitbit']];
+(async () => {
+  const AL = typeof capPlugin === 'function' && capPlugin('AppLauncher'); if (!AL) return;
+  for (const [pkg, name] of WATCH_APPS) { try { const r = await AL.canOpenUrl({url: pkg}); if (r && r.value) { HC.watchApp = {pkg, name}; App.refresh(); return; } } catch(e){} }
+})();
+App.acts.hcWatchApp = async () => { const AL = capPlugin('AppLauncher'); if (!AL || !HC.watchApp) return; HC.force = true; HC.forceMsg = true; try { await AL.openUrl({url: HC.watchApp.pkg}); } catch(e){ HC.force = false; toast('No se pudo abrir ' + HC.watchApp.name); } };
 App.acts.hcConnect = () => hcConnect();
 App.acts.hcSyncNow = () => hcSync(true);
 App.acts.hcSettings = async () => { try { await HC.plugin.openHealthConnectSettings(); } catch(e){ toast('No se pudo abrir Health Connect'); } };

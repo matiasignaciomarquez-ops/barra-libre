@@ -85,7 +85,7 @@ function cardioExtras(p, a){
     html += `<div class="card flat stack-s"><div class="row between"><b>Zonas de frecuencia cardíaca</b><span class="pill">Carga ${trimp(sec)}</span></div>${zoneBars(sec)}
       <div class="chartbox" style="height:150px"><canvas id="hrch"></canvas></div>
       <p class="tiny muted">${Z.method === 'reserve' ? `Zonas por FC de reserva (Karvonen): máx. ${Z.max}, reposo ${Z.rest}.` : `Zonas por % de FC máx. (${Z.max} lpm).`} Carga = minutos × número de zona (TRIMP de Edwards).${a.hrSrc === 'hc' || a.hrS ? ' Pulso tomado del reloj.' : ''}</p></div>`;
-  } else if (native && (a.sport === 'run' || a.sport === 'ride' || a.sport === 'class' || a.sport === 'yoga')) {
+  } else if (native && ['run', 'ride', 'hike', 'class', 'yoga'].includes(a.sport)) {
     html += `<button class="btn" data-act="hcEnrich" data-arg="${a.id}">Traer pulso y zonas del reloj</button>`;
   }
   if (a.cad) html += `<p class="small">Cadencia media: <b class="num">${a.cad}</b> pasos/min <span class="tiny muted">(referencia habitual en corredores recreativos: 160–180)</span></p>`;
@@ -100,7 +100,7 @@ function cardioExtras(p, a){
 const _actDetail3 = App.views.sh_actDetail;
 App.views.sh_actDetail = (p, sh) => {
   const html = _actDetail3(p, sh); const a = Store.get('activities', sh.id);
-  if (!a || !['run', 'ride', 'class', 'yoga'].includes(a.sport)) return html;
+  if (!a || !['run', 'ride', 'hike', 'class', 'yoga'].includes(a.sport)) return html;
   const ex = cardioExtras(p, a); if (!ex) return html;
   const marks = ['<div class="row"><button class="btn grow" data-act="editAct"', '<div class="row"><button class="btn grow" data-act="classRepeat"', '<button class="btn danger" data-act="askDelA"', '<button class="btn danger" data-act="delAct"'];
   for (const m of marks) { const i = html.indexOf(m); if (i > 0) return html.slice(0, i) + ex + html.slice(i); }
@@ -111,9 +111,9 @@ App.views.sh_actDetail = (p, sh) => {
 const _cardioView2 = App.views.cardio;
 App.views.cardio = (p) => {
   const html = _cardioView2(p);
-  if (S.cardio !== 'run' && S.cardio !== 'ride') return html;
+  if (!['run', 'ride', 'hike'].includes(S.cardio)) return html;
   const Z = myZones(p);
-  const acts = actsOf(p.id).filter(a => (a.sport === 'run' || a.sport === 'ride') && (Date.now() - new Date(a.date)) < 28 * 864e5);
+  const acts = actsOf(p.id).filter(a => ['run', 'ride', 'hike'].includes(a.sport) && (Date.now() - new Date(a.date)) < 28 * 864e5);
   const tot = [0, 0, 0, 0, 0]; let n = 0, load = 0;
   if (Z) acts.forEach(a => { const s = zoneTimes(a, Z); if (s) { n++; s.forEach((x, i) => tot[i] += x); load += trimp(s); } });
   const all = tot.reduce((a, b) => a + b, 0);
@@ -154,17 +154,18 @@ App.acts.zSave = async () => {
 // ---------- completar con el reloj (lo usa salud.js) ----------
 async function hcEnrichAct(a, H){
   if (!H || !a || !a.durSec) return false;
-  const end = new Date(new Date(a.date).getTime() + a.durSec * 1000 + 60000).toISOString();
+  const span = a.elapsedSec || a.durSec; // con pausas, el pulso se busca en todo el tiempo transcurrido
+  const end = new Date(new Date(a.date).getTime() + span * 1000 + 60000).toISOString();
   const t0 = new Date(a.date).getTime() - 60000;
   const r = await H.readSamples({dataType: 'heartRate', startDate: new Date(t0).toISOString(), endDate: end, limit: 10000, ascending: true});
-  const s = (r && r.samples || []).filter(x => x.value > 30 && x.value < 230).map(x => [Math.round((new Date(x.startDate).getTime() - new Date(a.date).getTime()) / 1000), Math.round(x.value)]).filter(x => x[0] >= 0 && x[0] <= a.durSec);
+  const s = (r && r.samples || []).filter(x => x.value > 30 && x.value < 230).map(x => [Math.round((new Date(x.startDate).getTime() - new Date(a.date).getTime()) / 1000), Math.round(x.value)]).filter(x => x[0] >= 0 && x[0] <= span);
   if (s.length < 5) return false;
   const step = Math.max(1, Math.ceil(s.length / 300));
   const hrS = s.filter((_, i) => i % step === 0 || i === s.length - 1);
   const v = s.map(x => x[1]);
   const upd = {...a, hrS, hrSrc: 'hc', hr: a.hr || Math.round(v.reduce((x, y) => x + y, 0) / v.length), hrMax: a.hrMax || Math.max(...v)};
   if (a.sport === 'run' && !a.cad) {
-    try { const st = await H.readSamples({dataType: 'steps', startDate: a.date, endDate: new Date(new Date(a.date).getTime() + a.durSec * 1000).toISOString(), limit: 2000, ascending: true}); const tot = (st.samples || []).reduce((t, x) => t + x.value, 0); const c = Math.round(tot / (a.durSec / 60)); if (c >= 100 && c <= 230) upd.cad = c; } catch(e){}
+    try { const st = await H.readSamples({dataType: 'steps', startDate: a.date, endDate: new Date(new Date(a.date).getTime() + span * 1000).toISOString(), limit: 2000, ascending: true}); const tot = (st.samples || []).reduce((t, x) => t + x.value, 0); const c = Math.round(tot / (a.durSec / 60)); if (c >= 100 && c <= 230) upd.cad = c; } catch(e){}
   }
   await Store.put('activities', upd);
   return true;
