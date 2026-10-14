@@ -92,3 +92,6 @@ App.views.lift = (p) => {
 };
 App.acts.hangSwap = async () => { const p = curProfile(); const plan = JSON.parse(JSON.stringify(p.plan)); plan.days.forEach(d => d.items.forEach(it => { if (/^Hanging_/.test(it.ex)) { const used = d.items.map(x => x.ex); it.ex = !used.includes('Plank') ? 'Plank' : 'Dead_Bug'; if (EX[it.ex] && EX[it.ex].u === 'sec') { it.lo = 20; it.hi = 60; } } })); await Store.put('profiles', {...p, plan}); ls.set('bl_hang_ok_' + p.id, true); App.render(); toast('Plan actualizado: plancha en lugar de elevación colgado'); };
 App.acts.hangKeep = () => { ls.set('bl_hang_ok_' + curProfile().id, true); App.render(); };
+
+// versión visible al pie del menú (para saber si ya tenés la última)
+if (App.views.sh_menu) { const _mv = App.views.sh_menu; App.views.sh_menu = (p, sh) => _mv(p, sh) + `<p class="tiny muted" style="text-align:center;margin-top:10px">Versión ${esc(window.APP_VERSION || '')}</p>`; }

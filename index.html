@@ -240,4 +240,9 @@ details[open]>summary::after{content:" –"}
 <script src="logros.js"></script>
 <script src="extras.js"></script>
 <script src="main.js"></script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script></body></html>
+<script>window.APP_VERSION='2026-10-14e';
+if('serviceWorker' in navigator){addEventListener('load',()=>{const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.register('sw.js').then(r=>{try{r.update()}catch(e){}}).catch(()=>{});
+let done=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(done||!had)return;done=true;
+const busy=(typeof REC!=='undefined'&&REC.st&&!REC.st.endAt)||(typeof S!=='undefined'&&S.ov);
+if(busy){try{toast('Hay una versión nueva: se aplica la próxima vez que abras la app')}catch(e){}return;}
+location.reload();});});}</script></body></html>
