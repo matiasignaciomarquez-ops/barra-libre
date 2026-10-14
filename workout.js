@@ -155,7 +155,7 @@ App.acts.minimizeW = () => { S.ov = null; App.renderOverlay(); App.render(); };
 
 // ---------- descanso ----------
 function startRest(sec, ex){
-  const cats = ['fundamentos','tecnica','recuperacion', S.ov.w.goal === 'fuerza' ? 'fuerza' : 'hipertrofia', S.ov.w.goal === 'recomp' ? 'nutricion' : 'hipertrofia', S.ov.w.planKind === 'calis' ? 'calistenia' : 'fundamentos'];
+  const cats = ['fundamentos','tecnica','recuperacion', S.ov.w.goal === 'fuerza' ? 'fuerza' : 'hipertrofia', S.ov.w.goal === 'recomp' ? 'nutricion' : 'hipertrofia', S.ov.w.planKind === 'calis' ? 'calistenia' : 'fundamentos', 'datos'];
   const pool = TIPS.filter(t => cats.includes(t.cat));
   S.restTipI = (S.restTipI == null ? Math.floor(Math.random() * pool.length) : S.restTipI + 1) % pool.length;
   S.rest = {end: Date.now() + sec * 1000, total: sec, tip: pool[S.restTipI], cue: ex.cues[Math.floor(Math.random() * ex.cues.length)], exName: nm(ex)[0], beeped: false};
